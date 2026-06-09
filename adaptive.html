@@ -607,7 +607,11 @@
   ui.lofi.addEventListener('input', () => { refreshLabels(); setLofi(); });
   ui.vol.addEventListener('input', () => {
     refreshLabels();
-    if (ctx) masterGain.gain.linearRampToValueAtTime(ui.vol.value / 100 * 0.8, ctx.currentTime + 0.2);
+    if (ctx) {
+      masterGain.gain.cancelScheduledValues(ctx.currentTime);
+      masterGain.gain.setValueAtTime(masterGain.gain.value, ctx.currentTime);
+      masterGain.gain.linearRampToValueAtTime(ui.vol.value / 100 * 0.8, ctx.currentTime + 0.2);
+    }
   });
   refreshLabels();
 
@@ -628,6 +632,8 @@
       if (typeof session !== 'undefined' && session) endSession(false); // power off ends any session
       clearTimeout(schedulerTimer);
       clearTimeout(driftTimer);
+      masterGain.gain.cancelScheduledValues(ctx.currentTime);
+      masterGain.gain.setValueAtTime(masterGain.gain.value, ctx.currentTime);
       masterGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 3);
       setTimeout(() => {
         droneNodes.forEach(n => { try { n.stop ? n.stop() : n.disconnect(); } catch (e) {} });
@@ -706,6 +712,7 @@
     sessBtn.textContent = 'END SESSION';
     // session start fades in (spec: bookends fade)
     if (ctx) {
+      masterGain.gain.cancelScheduledValues(ctx.currentTime);
       masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
       masterGain.gain.linearRampToValueAtTime(ui.vol.value / 100 * 0.8, ctx.currentTime + 8);
     }
@@ -739,10 +746,15 @@
     // then resolve affirmatively
     resolveBias = (ph === 'wind-down') ? 1.6 : 0.15;
     if (Math.floor(t) % 5 === 0) applyIntensity(arcIntensity(t, s));
-    // session end fades out over the last 15 seconds
+    // session end fades out over the last 15 seconds.
+    // NB: anchor current value first — linearRamp interpolates from the LAST
+    // scheduled event (the fade-in at session start), not from now.
     if (ctx && !s.fading && s.D - t < 15) {
       s.fading = true;
-      masterGain.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + (s.D - t));
+      const g = masterGain.gain;
+      g.cancelScheduledValues(ctx.currentTime);
+      g.setValueAtTime(g.value, ctx.currentTime);
+      g.linearRampToValueAtTime(0.0001, ctx.currentTime + (s.D - t));
     }
     document.getElementById('phaseVal').textContent = ph;
     document.getElementById('phaseName').textContent = ph;
