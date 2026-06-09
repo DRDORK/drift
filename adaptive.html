@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drift — Generative Ambient</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #121821;
+    --text: #c9d4e0;
+    --dim: #5f6e80;
+    --accent: #7fb8a4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(ellipse at 50% 30%, #101724 0%, var(--bg) 70%);
+    color: var(--text);
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  h1 {
+    font-weight: 300;
+    letter-spacing: 0.5em;
+    text-transform: uppercase;
+    font-size: 20px;
+    margin-bottom: 4px;
+    padding-left: 0.5em;
+  }
+  .sub { color: var(--dim); font-size: 12px; letter-spacing: 0.2em; margin-bottom: 28px; }
+  canvas#viz {
+    width: min(560px, 90vw);
+    height: 140px;
+    margin-bottom: 28px;
+    opacity: 0.9;
+  }
+  .panel {
+    background: rgba(18, 24, 33, 0.8);
+    border: 1px solid #1d2735;
+    border-radius: 16px;
+    padding: 28px 32px;
+    width: min(560px, 92vw);
+    backdrop-filter: blur(6px);
+  }
+  button#power {
+    display: block;
+    margin: 0 auto 26px;
+    width: 84px; height: 84px;
+    border-radius: 50%;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.4s ease;
+  }
+  button#power:hover { background: rgba(127, 184, 164, 0.1); }
+  button#power.on {
+    background: var(--accent);
+    color: #0b0f14;
+    box-shadow: 0 0 40px rgba(127, 184, 164, 0.35);
+  }
+  .control { margin-bottom: 18px; }
+  .control label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 8px;
+  }
+  .control label .val { color: var(--text); }
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 2px;
+    background: #243140;
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+  .hint { color: var(--dim); font-size: 11px; text-align: center; margin-top: 22px; letter-spacing: 0.05em; }
+  .session { border-top: 1px solid #1d2735; margin-top: 24px; padding-top: 20px; }
+  .session-row { display: flex; gap: 10px; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .session-row input[type="number"] {
+    width: 64px; background: #0e141c; border: 1px solid #243140; color: var(--text);
+    border-radius: 8px; padding: 8px; font-size: 14px; text-align: center; font-family: inherit;
+  }
+  .session-row .mins { color: var(--dim); font-size: 12px; }
+  button#sessionBtn {
+    background: transparent; border: 1px solid var(--accent); color: var(--accent);
+    border-radius: 20px; padding: 9px 18px; font-size: 11px; letter-spacing: 0.15em;
+    cursor: pointer; transition: all 0.3s ease;
+  }
+  button#sessionBtn:hover { background: rgba(127, 184, 164, 0.1); }
+  #arcWrap { display: none; margin-top: 4px; }
+  #arcCanvas { width: 100%; height: 64px; display: block; }
+  .phase-label {
+    display: flex; justify-content: space-between; font-size: 11px; color: var(--dim);
+    letter-spacing: 0.15em; text-transform: uppercase; margin-top: 6px;
+  }
+  .phase-label #phaseName { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>Drift</h1>
+<div class="sub">GENERATIVE AMBIENT ENGINE</div>
+
+<canvas id="viz" width="1120" height="280"></canvas>
+
+<div class="panel">
+  <button id="power">PLAY</button>
+
+  <div class="control">
+    <label>Mood <span class="val" id="moodVal">dusk</span></label>
+    <input type="range" id="mood" min="0" max="100" value="40">
+  </div>
+  <div class="control">
+    <label>Density <span class="val" id="densityVal">sparse</span></label>
+    <input type="range" id="density" min="0" max="100" value="35">
+  </div>
+  <div class="control">
+    <label>Space <span class="val" id="spaceVal">vast</span></label>
+    <input type="range" id="space" min="0" max="100" value="70">
+  </div>
+  <div class="control">
+    <label>Lofi <span class="val" id="lofiVal">warm</span></label>
+    <input type="range" id="lofi" min="0" max="100" value="25">
+  </div>
+  <div class="control">
+    <label>Volume <span class="val" id="volVal">70%</span></label>
+    <input type="range" id="vol" min="0" max="100" value="70">
+  </div>
+
+  <div class="session">
+    <div class="control" style="margin-bottom:12px">
+      <label>Adaptive Session <span class="val" id="phaseVal">off</span></label>
+    </div>
+    <div class="session-row">
+      <input type="number" id="sessMin" min="5" max="480" value="25">
+      <span class="mins">min</span>
+      <button id="sessionBtn">START SESSION</button>
+    </div>
+    <div id="arcWrap">
+      <canvas id="arcCanvas" width="992" height="128"></canvas>
+      <div class="phase-label"><span id="phaseName">&mdash;</span><span id="timeLeft">&mdash;</span></div>
+    </div>
+  </div>
+
+  <div class="hint">Flow and intensity adapt to whatever session length you set. No two sessions are the same.</div>
+</div>
+
+<script>
+(() => {
+  // ---------- State ----------
+  let ctx = null, running = false;
+  let masterGain, filter, dryGain, wetGain, convolver, analyser, droneNodes = [];
+  let schedulerTimer = null, driftTimer = null;
+  // lofi stage nodes
+  let wowDelay, wowLFO, wowDepth, cleanGain, satPre, satShaper, satTone, satGain, lofiBus, crackleGain;
+  let droneFifthGain = null;
+  // harmonic resolution control: 1 = tonic freely allowed (free play);
+  // <1 = withhold the tonic (mid-session pull); >1 = favor the tonic (coda resolution)
+  let resolveBias = 1;
+
+  const ROOT = 73.42; // D2
+  const SCALE_DARK   = [0, 3, 5, 7, 10];       // minor pentatonic
+  const SCALE_WARM   = [0, 2, 4, 7, 9];        // major pentatonic — clash-proof against the drone
+  const SCALE_BRIGHT = [0, 2, 4, 7, 9, 11];    // major pent + maj7 color, no tritone
+
+  const ui = {
+    mood:    document.getElementById('mood'),
+    density: document.getElementById('density'),
+    space:   document.getElementById('space'),
+    lofi:    document.getElementById('lofi'),
+    vol:     document.getElementById('vol'),
+  };
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  // ---------- Audio graph ----------
+  function buildGraph() {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    masterGain = ctx.createGain();
+    masterGain.gain.value = ui.vol.value / 100 * 0.8;
+
+    filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.7;
+
+    convolver = ctx.createConvolver();
+    convolver.buffer = makeImpulse(6, 3.5);
+
+    dryGain = ctx.createGain();
+    wetGain = ctx.createGain();
+    setSpace();
+
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+
+    // ---- Lofi stage: filter -> wow/flutter -> clean/saturated blend (+crackle) -> reverb split
+    wowDelay = ctx.createDelay(0.1);
+    wowDelay.delayTime.value = 0.02;
+    wowLFO = ctx.createOscillator();
+    wowLFO.frequency.value = 0.8; // slow tape wobble
+    wowDepth = ctx.createGain();
+    wowDepth.gain.value = 0;
+    wowLFO.connect(wowDepth);
+    wowDepth.connect(wowDelay.delayTime);
+    wowLFO.start();
+
+    cleanGain = ctx.createGain();
+    satPre = ctx.createGain();      // drive into the shaper
+    satShaper = ctx.createWaveShaper();
+    satShaper.curve = makeSatCurve(3);
+    satShaper.oversample = '2x';
+    satTone = ctx.createBiquadFilter(); // darkens the saturated path
+    satTone.type = 'lowpass';
+    satTone.frequency.value = 16000;
+    satGain = ctx.createGain();
+    lofiBus = ctx.createGain();
+
+    filter.connect(wowDelay);
+    wowDelay.connect(cleanGain);
+    cleanGain.connect(lofiBus);
+    wowDelay.connect(satPre);
+    satPre.connect(satShaper);
+    satShaper.connect(satTone);
+    satTone.connect(satGain);
+    satGain.connect(lofiBus);
+
+    // vinyl crackle + faint hiss, looped
+    crackleGain = ctx.createGain();
+    crackleGain.gain.value = 0;
+    const crackleSrc = ctx.createBufferSource();
+    crackleSrc.buffer = makeCrackle(20); // long loop so the tick pattern never reads as repeating
+    crackleSrc.loop = true;
+    crackleSrc.connect(crackleGain);
+    crackleGain.connect(lofiBus);
+    crackleSrc.start();
+
+    // lofiBus -> (dry + reverb) -> master -> analyser -> out
+    lofiBus.connect(dryGain);
+    lofiBus.connect(convolver);
+    convolver.connect(wetGain);
+    dryGain.connect(masterGain);
+    wetGain.connect(masterGain);
+    masterGain.connect(analyser);
+    analyser.connect(ctx.destination);
+
+    setMoodFilter();
+    setLofi();
+  }
+
+  function makeSatCurve(k) {
+    const n = 1024, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(k * x) / Math.tanh(k);
+    }
+    return curve;
+  }
+
+  function makeCrackle(seconds) {
+    const len = ctx.sampleRate * seconds;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      if (Math.random() < 0.00004) {
+        const amp = rand(0.25, 1) * (Math.random() < 0.5 ? -1 : 1);
+        for (let j = 0; j < 50 && i + j < len; j++) {
+          d[i + j] += amp * Math.pow(1 - j / 50, 2) * (Math.random() * 0.6 + 0.4);
+        }
+      }
+      d[i] += (Math.random() * 2 - 1) * 0.0025; // tape hiss floor
+    }
+    return buf;
+  }
+
+  function makeImpulse(seconds, decay) {
+    const len = ctx.sampleRate * seconds;
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+    }
+    return buf;
+  }
+
+  // ---------- Drone ----------
+  function startDrone() {
+    const detunes = [-4, 3];
+    detunes.forEach(dt => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = ROOT / 2; // D1
+      osc.detune.value = dt;
+
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      g.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 8);
+
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 180;
+
+      // slow breathing on the drone
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = rand(0.02, 0.05);
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.018;
+      lfo.connect(lfoGain);
+      lfoGain.connect(g.gain);
+
+      osc.connect(lp); lp.connect(g); g.connect(filter);
+      osc.start(); lfo.start();
+      droneNodes.push(osc, lfo, g);
+    });
+
+    // a quiet fifth above the root that swells with brighter moods
+    const fifth = ctx.createOscillator();
+    fifth.type = 'triangle';
+    fifth.frequency.value = ROOT * Math.pow(2, 7 / 12); // A2, equal temperament
+    droneFifthGain = ctx.createGain();
+    droneFifthGain.gain.value = 0;
+    droneFifthGain.gain.linearRampToValueAtTime((ui.mood.value / 100) * 0.035, ctx.currentTime + 8);
+    fifth.connect(droneFifthGain);
+    droneFifthGain.connect(filter);
+    fifth.start();
+    droneNodes.push(fifth, droneFifthGain);
+  }
+
+  // ---------- Generative voices ----------
+  function moodScale() {
+    // one scale at a time — never mix minor and major pools note-by-note
+    const m = ui.mood.value / 100;
+    if (m < 0.35) return SCALE_DARK;
+    if (m < 0.70) return SCALE_WARM;
+    return SCALE_BRIGHT;
+  }
+
+  // track ringing pitch classes so new notes never land a semitone/tritone away
+  let sounding = [];
+  function clashesWithSounding(pc) {
+    const now = ctx.currentTime;
+    sounding = sounding.filter(s => s.until > now);
+    return sounding.some(s => {
+      const d = Math.abs(s.pc - pc) % 12;
+      const iv = Math.min(d, 12 - d);
+      return iv === 1 || iv === 6;
+    });
+  }
+
+  function spawnNote() {
+    if (!running) return;
+    const m = ui.mood.value / 100;
+    const scale = moodScale();
+    const octave = pick(m > 0.6 ? [1, 2, 2, 3] : [0, 1, 1, 2]);
+    const now = ctx.currentTime;
+
+    let semis = pick(scale);
+    // harmonic resolution device (adaptive sessions): withhold the tonic until
+    // the wind-down, then resolve to it affirmatively
+    if (semis === 0 && Math.random() > resolveBias) semis = pick(scale.filter(x => x !== 0));
+    else if (resolveBias > 1 && Math.random() < 0.35) semis = 0;
+    for (let i = 0; i < 8 && clashesWithSounding(semis); i++) semis = pick(scale);
+    if (clashesWithSounding(semis)) return; // rest beats dissonance
+
+    const freq = ROOT * Math.pow(2, octave + semis / 12);
+    const r = Math.random();
+    let dur;
+    if (r < 0.20) dur = spawnBell(freq * 2, now, m);
+    else if (r < 0.42) dur = spawnPluck(freq * 2, now);
+    else dur = spawnPad(freq, octave, m, now);
+    sounding.push({ pc: semis, until: now + dur * 0.8 });
+  }
+
+  function panTo(node) {
+    if (ctx.createStereoPanner) {
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = rand(-0.8, 0.8);
+      node.connect(pan);
+      pan.connect(filter);
+    } else {
+      node.connect(filter);
+    }
+  }
+
+  // FM bell: sine carrier; modulator goes harmonic as mood brightens
+  function spawnBell(freq, now, m) {
+    const dur = rand(6, 12);
+    const peak = rand(0.04, 0.08);
+
+    const carrier = ctx.createOscillator();
+    carrier.type = 'sine';
+    carrier.frequency.value = freq;
+
+    const mod = ctx.createOscillator();
+    mod.type = 'sine';
+    // bright = pure harmonic ratios (warm chime); dark = slightly inharmonic (real bell)
+    mod.frequency.value = freq * pick(m > 0.5 ? [2, 3, 4] : [2, 2.76, 3.5]);
+
+    const modGain = ctx.createGain();
+    modGain.gain.setValueAtTime(freq * rand(1.5, 4), now);
+    modGain.gain.exponentialRampToValueAtTime(freq * 0.01, now + dur);
+    mod.connect(modGain);
+    modGain.connect(carrier.frequency);
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(peak, now + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    carrier.connect(g);
+    panTo(g);
+    carrier.start(now); mod.start(now);
+    carrier.stop(now + dur + 0.1); mod.stop(now + dur + 0.1);
+    return dur;
+  }
+
+  // Karplus-Strong pluck, rendered into a buffer
+  function spawnPluck(freq, now) {
+    const dur = 3.5;
+    const sr = ctx.sampleRate;
+    const len = Math.floor(sr * dur);
+    const buf = ctx.createBuffer(1, len, sr);
+    const d = buf.getChannelData(0);
+    const N = Math.max(2, Math.round(sr / freq));
+    const line = new Float32Array(N);
+    for (let i = 0; i < N; i++) line[i] = Math.random() * 2 - 1;
+    // smooth the excitation: raw noise reads as a record scratch, filtered noise as a finger pluck
+    for (let p = 0; p < 3; p++) {
+      let prev = line[N - 1];
+      for (let i = 0; i < N; i++) { const cur = line[i]; line[i] = 0.5 * (cur + prev); prev = cur; }
+    }
+    let idx = 0;
+    for (let i = 0; i < len; i++) {
+      const next = (idx + 1) % N;
+      line[idx] = 0.5 * (line[idx] + line[next]) * 0.996;
+      d[i] = line[idx];
+      idx = next;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    // KS quantizes pitch to integer delay-line lengths (±12 cents off);
+    // compensate with playbackRate so plucks land exactly on equal temperament.
+    // Effective KS frequency is ~sr/(N + 0.5) (the averager adds half a sample).
+    src.playbackRate.value = freq * (N + 0.5) / sr;
+    const g = ctx.createGain();
+    const peak = rand(0.14, 0.28); // a touch hotter since the filtering removes energy
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(peak, now + 0.012); // 12ms anti-click ramp
+    src.connect(g);
+    panTo(g);
+    src.start(now);
+    return 2.5;
+  }
+
+  function spawnPad(freq, octave, m, now) {
+    const attack  = rand(2.5, 6);
+    const sustain = rand(2, 6);
+    const release = rand(5, 12);
+    const peak = rand(0.04, 0.10) * (octave >= 3 ? 0.5 : 1);
+
+    const osc = ctx.createOscillator();
+    osc.type = Math.random() < 0.5 ? 'sine' : 'triangle';
+    osc.frequency.value = freq;
+    osc.detune.value = rand(-3, 3);
+    // very gentle pitch drift — chorus warmth, not seasick
+    osc.detune.linearRampToValueAtTime(rand(-4, 4), now + attack + sustain + release);
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(peak, now + attack);
+    g.gain.setValueAtTime(peak, now + attack + sustain);
+    g.gain.linearRampToValueAtTime(0, now + attack + sustain + release);
+
+    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+
+    osc.connect(g);
+    if (pan) {
+      pan.pan.value = rand(-0.8, 0.8);
+      g.connect(pan); pan.connect(filter);
+    } else {
+      g.connect(filter);
+    }
+
+    osc.start(now);
+    osc.stop(now + attack + sustain + release + 0.1);
+
+    // occasional sparkle: a high fifth, very quiet, long tail
+    if (Math.random() < 0.18 + m * 0.2) {
+      const s = ctx.createOscillator();
+      s.type = 'sine';
+      s.frequency.value = freq * Math.pow(2, 19 / 12); // octave + fifth, equal temperament
+      const sg = ctx.createGain();
+      sg.gain.setValueAtTime(0, now);
+      sg.gain.linearRampToValueAtTime(peak * 0.25, now + attack * 1.5);
+      sg.gain.linearRampToValueAtTime(0, now + attack + sustain + release * 1.4);
+      s.connect(sg); sg.connect(filter);
+      s.start(now);
+      s.stop(now + attack + sustain + release * 1.4 + 0.1);
+    }
+    return attack + sustain + release;
+  }
+
+  function schedule() {
+    if (!running) return;
+    spawnNote();
+    const d = ui.density.value / 100;
+    const interval = rand(0.6, 1.4) * (7 - d * 6) * 1000; // ~1s dense → ~7s sparse
+    schedulerTimer = setTimeout(schedule, interval);
+  }
+
+  // slow autonomous drift of the filter so it evolves even untouched
+  function drift() {
+    if (!running) return;
+    setMoodFilter(rand(0.85, 1.15));
+    driftTimer = setTimeout(drift, rand(8000, 20000));
+  }
+
+  // ---------- Control mapping ----------
+  function setMoodFilter(jitter = 1) {
+    if (!ctx) return;
+    const m = ui.mood.value / 100;
+    const cutoff = (350 + m * 3200) * jitter;
+    filter.frequency.linearRampToValueAtTime(cutoff, ctx.currentTime + 4);
+    if (droneFifthGain) droneFifthGain.gain.linearRampToValueAtTime(m * 0.035, ctx.currentTime + 4);
+  }
+
+  function setSpace() {
+    if (!ctx) return;
+    const s = ui.space.value / 100;
+    wetGain.gain.value = 0.2 + s * 0.75;
+    dryGain.gain.value = 1.0 - s * 0.45;
+  }
+
+  function setLofi() {
+    if (!ctx) return;
+    const l = ui.lofi.value / 100;
+    const t = ctx.currentTime + 0.5;
+    const drive = 1 + l * 1.5;
+    // makeup gain cancels the drive + shaper slope (~3.02) so loudness stays flat;
+    // pow(drive, 0.7) leaves a touch of compression, which is the tape feel
+    const makeup = (l * 0.9) / (3.02 * Math.pow(drive, 0.7));
+    cleanGain.gain.linearRampToValueAtTime(1 - l * 0.85, t);          // fade out clean path
+    satPre.gain.linearRampToValueAtTime(drive, t);                    // push into the shaper
+    satGain.gain.linearRampToValueAtTime(makeup, t);                  // auto-gain-compensated sat path
+    satTone.frequency.linearRampToValueAtTime(16000 - l * 12500, t);  // darken with wear
+    wowDepth.gain.linearRampToValueAtTime(l * 0.0012, t);             // tape wow (pitch wobble)
+    // crackle is fully gated until the top half of the knob (tape/worn/crushed only)
+    const ck = l < 0.5 ? 0 : Math.pow((l - 0.5) / 0.5, 2) * 0.3;
+    crackleGain.gain.linearRampToValueAtTime(ck, t);
+  }
+
+  const moodWords = ['abyss', 'dusk', 'dusk', 'overcast', 'dawn', 'radiant'];
+  const densWords = ['glacial', 'sparse', 'sparse', 'drifting', 'flowing', 'lush'];
+  const spaceWords = ['close', 'room', 'hall', 'cathedral', 'vast', 'infinite'];
+  const lofiWords = ['pristine', 'warm', 'dusty', 'tape', 'worn', 'crushed'];
+  const word = (arr, v) => arr[Math.min(arr.length - 1, Math.floor(v / 100 * arr.length))];
+
+  function refreshLabels() {
+    document.getElementById('moodVal').textContent = word(moodWords, +ui.mood.value);
+    document.getElementById('densityVal').textContent = word(densWords, +ui.density.value);
+    document.getElementById('spaceVal').textContent = word(spaceWords, +ui.space.value);
+    document.getElementById('lofiVal').textContent = word(lofiWords, +ui.lofi.value);
+    document.getElementById('volVal').textContent = ui.vol.value + '%';
+  }
+
+  ui.mood.addEventListener('input', () => { refreshLabels(); setMoodFilter(); });
+  ui.density.addEventListener('input', refreshLabels);
+  ui.space.addEventListener('input', () => { refreshLabels(); setSpace(); });
+  ui.lofi.addEventListener('input', () => { refreshLabels(); setLofi(); });
+  ui.vol.addEventListener('input', () => {
+    refreshLabels();
+    if (ctx) masterGain.gain.linearRampToValueAtTime(ui.vol.value / 100 * 0.8, ctx.currentTime + 0.2);
+  });
+  refreshLabels();
+
+  // ---------- Power ----------
+  const powerBtn = document.getElementById('power');
+  powerBtn.addEventListener('click', async () => {
+    if (!running) {
+      if (!ctx) buildGraph();
+      await ctx.resume();
+      running = true;
+      startDrone();
+      schedule();
+      drift();
+      powerBtn.textContent = 'STOP';
+      powerBtn.classList.add('on');
+    } else {
+      running = false;
+      if (typeof session !== 'undefined' && session) endSession(false); // power off ends any session
+      clearTimeout(schedulerTimer);
+      clearTimeout(driftTimer);
+      masterGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 3);
+      setTimeout(() => {
+        droneNodes.forEach(n => { try { n.stop ? n.stop() : n.disconnect(); } catch (e) {} });
+        droneNodes = [];
+        ctx.suspend();
+        masterGain.gain.value = ui.vol.value / 100 * 0.8;
+      }, 3200);
+      powerBtn.textContent = 'PLAY';
+      powerBtn.classList.remove('on');
+    }
+  });
+
+  // ---------- Adaptive Session (Mubert-spec demo) ----------
+  // Implements the Adaptive Focus Music arc: clamped bookends, stretchy middle.
+  // on_ramp = clamp(0.12D, 90s, 300s); wind_down = clamp(0.06D, 120s, 300s);
+  // final_lift = clamp(0.12D, 180s, 720s); deep focus absorbs the rest.
+  const clampV = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  let session = null;
+
+  const sessBtn  = document.getElementById('sessionBtn');
+  const sessMin  = document.getElementById('sessMin');
+  const arcWrap  = document.getElementById('arcWrap');
+  const arcCanvas = document.getElementById('arcCanvas');
+  const arcCtx   = arcCanvas.getContext('2d');
+
+  function buildSchedule(D) {
+    let onRamp    = clampV(0.12 * D, 90, 300);
+    let windDown  = clampV(0.06 * D, 120, 300);
+    let finalLift = clampV(0.12 * D, 180, 720);
+    // guard for very short sessions: collapse final_lift first (per spec)
+    if (onRamp + finalLift + windDown > D * 0.9) {
+      finalLift = Math.max(0, D * 0.9 - onRamp - windDown);
+    }
+    if (onRamp + windDown > D) { onRamp = D * 0.4; windDown = D * 0.3; finalLift = 0; }
+    return { D, tMedium: onRamp, tHigh: D - windDown - finalLift, tLow: D - windDown };
+  }
+
+  // continuous intensity 0..1 along the arc — ramps in the bookends, steady middle.
+  // (Improvement over the streaming API's three discrete steps.)
+  function arcIntensity(t, s) {
+    const LOW = 0.22, MED = 0.55, HIGH = 0.85, END = 0.12;
+    if (t < s.tMedium) return LOW + (MED - LOW) * (t / Math.max(1, s.tMedium));
+    if (t < s.tHigh)   return MED;
+    if (t < s.tLow)    return MED + (HIGH - MED) * ((t - s.tHigh) / Math.max(1, s.tLow - s.tHigh));
+    return HIGH + (END - HIGH) * ((t - s.tLow) / Math.max(1, s.D - s.tLow));
+  }
+
+  function phaseOf(t, s) {
+    if (t < s.tMedium) return 'settling in';
+    if (t < s.tHigh)   return 'deep focus';
+    if (t < s.tLow)    return 'final stretch';
+    return 'wind-down';
+  }
+
+  function applyIntensity(i) {
+    // drive the existing controls so the arc is visible on the knobs
+    ui.mood.value = Math.round(38 + i * 34);     // stays in warm-to-bright territory
+    ui.density.value = Math.round(12 + i * 62);
+    refreshLabels();
+    setMoodFilter();
+  }
+
+  function startSession() {
+    const mins = clampV(parseInt(sessMin.value, 10) || 25, 5, 480);
+    sessMin.value = mins;
+    if (!running) powerBtn.click(); // engine on
+    session = buildSchedule(mins * 60);
+    session.t0 = Date.now();
+    session.fading = false;
+    arcWrap.style.display = 'block';
+    sessBtn.textContent = 'END SESSION';
+    // session start fades in (spec: bookends fade)
+    if (ctx) {
+      masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      masterGain.gain.linearRampToValueAtTime(ui.vol.value / 100 * 0.8, ctx.currentTime + 8);
+    }
+    session.timer = setInterval(tickSession, 1000);
+    tickSession();
+  }
+
+  function endSession(stopEngine) {
+    if (!session) return;
+    clearInterval(session.timer);
+    session = null;
+    resolveBias = 1;
+    sessBtn.textContent = 'START SESSION';
+    document.getElementById('phaseVal').textContent = 'off';
+    arcWrap.style.display = 'none';
+    if (stopEngine && running) powerBtn.click(); // graceful fade + stop
+  }
+
+  function tickSession() {
+    if (!session) return;
+    const s = session;
+    const t = (Date.now() - s.t0) / 1000;
+    if (t >= s.D) { endSession(true); return; }
+    const ph = phaseOf(t, s);
+    // the composed-track device: withhold tonic resolution until the wind-down,
+    // then resolve affirmatively
+    resolveBias = (ph === 'wind-down') ? 1.6 : 0.15;
+    if (Math.floor(t) % 5 === 0) applyIntensity(arcIntensity(t, s));
+    // session end fades out over the last 15 seconds
+    if (ctx && !s.fading && s.D - t < 15) {
+      s.fading = true;
+      masterGain.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + (s.D - t));
+    }
+    document.getElementById('phaseVal').textContent = ph;
+    document.getElementById('phaseName').textContent = ph;
+    const rem = s.D - t;
+    document.getElementById('timeLeft').textContent =
+      Math.floor(rem / 60) + ':' + String(Math.floor(rem % 60)).padStart(2, '0');
+    drawArc(t, s);
+  }
+
+  function drawArc(t, s) {
+    const w = arcCanvas.width, h = arcCanvas.height;
+    arcCtx.clearRect(0, 0, w, h);
+    // intensity curve
+    arcCtx.beginPath();
+    arcCtx.strokeStyle = 'rgba(127,184,164,0.9)';
+    arcCtx.lineWidth = 3;
+    for (let x = 0; x <= w; x += 4) {
+      const y = h - 14 - arcIntensity(s.D * x / w, s) * (h - 28);
+      x === 0 ? arcCtx.moveTo(x, y) : arcCtx.lineTo(x, y);
+    }
+    arcCtx.stroke();
+    // phase boundary ticks
+    arcCtx.strokeStyle = 'rgba(95,110,128,0.5)';
+    arcCtx.lineWidth = 1;
+    [s.tMedium, s.tHigh, s.tLow].forEach(bt => {
+      const bx = (bt / s.D) * w;
+      arcCtx.beginPath(); arcCtx.moveTo(bx, h - 18); arcCtx.lineTo(bx, h - 4); arcCtx.stroke();
+    });
+    // playhead
+    const px = (t / s.D) * w;
+    arcCtx.strokeStyle = 'rgba(201,212,224,0.85)';
+    arcCtx.lineWidth = 2;
+    arcCtx.beginPath(); arcCtx.moveTo(px, 4); arcCtx.lineTo(px, h - 4); arcCtx.stroke();
+  }
+
+  sessBtn.addEventListener('click', () => session ? endSession(true) : startSession());
+
+  // ---------- Visualizer ----------
+  const canvas = document.getElementById('viz');
+  const g2d = canvas.getContext('2d');
+  function draw() {
+    requestAnimationFrame(draw);
+    g2d.clearRect(0, 0, canvas.width, canvas.height);
+    if (!analyser || !running) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteTimeDomainData(data);
+    g2d.beginPath();
+    g2d.strokeStyle = 'rgba(127, 184, 164, 0.7)';
+    g2d.lineWidth = 2;
+    const step = canvas.width / data.length;
+    for (let i = 0; i < data.length; i++) {
+      const y = (data[i] / 255) * canvas.height;
+      i === 0 ? g2d.moveTo(0, y) : g2d.lineTo(i * step, y);
+    }
+    g2d.stroke();
+  }
+  draw();
+})();
+</script>
+</body>
+</html>
