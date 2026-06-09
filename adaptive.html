@@ -121,6 +121,12 @@
     letter-spacing: 0.15em; text-transform: uppercase; margin-top: 6px;
   }
   .phase-label #phaseName { color: var(--accent); }
+  /* sliders driven by the session arc: visible but locked */
+  .control.auto { opacity: 0.45; transition: opacity 0.4s ease; }
+  .control.auto input { pointer-events: none; }
+  .control.auto input::-webkit-slider-thumb { background: var(--dim); }
+  .control.auto input::-moz-range-thumb { background: var(--dim); }
+  .control.auto label .val { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -133,11 +139,11 @@
 <div class="panel">
   <button id="power">PLAY</button>
 
-  <div class="control">
+  <div class="control" id="moodCtl">
     <label>Mood <span class="val" id="moodVal">dusk</span></label>
     <input type="range" id="mood" min="0" max="100" value="40">
   </div>
-  <div class="control">
+  <div class="control" id="densityCtl">
     <label>Density <span class="val" id="densityVal">sparse</span></label>
     <input type="range" id="density" min="0" max="100" value="35">
   </div>
@@ -184,6 +190,7 @@
   // harmonic resolution control: 1 = tonic freely allowed (free play);
   // <1 = withhold the tonic (mid-session pull); >1 = favor the tonic (coda resolution)
   let resolveBias = 1;
+  let sessionActive = false;
 
   const ROOT = 73.42; // D2
   const SCALE_DARK   = [0, 3, 5, 7, 10];       // minor pentatonic
@@ -586,8 +593,9 @@
   const word = (arr, v) => arr[Math.min(arr.length - 1, Math.floor(v / 100 * arr.length))];
 
   function refreshLabels() {
-    document.getElementById('moodVal').textContent = word(moodWords, +ui.mood.value);
-    document.getElementById('densityVal').textContent = word(densWords, +ui.density.value);
+    const auto = sessionActive ? 'auto · ' : '';
+    document.getElementById('moodVal').textContent = auto + word(moodWords, +ui.mood.value);
+    document.getElementById('densityVal').textContent = auto + word(densWords, +ui.density.value);
     document.getElementById('spaceVal').textContent = word(spaceWords, +ui.space.value);
     document.getElementById('lofiVal').textContent = word(lofiWords, +ui.lofi.value);
     document.getElementById('volVal').textContent = ui.vol.value + '%';
@@ -689,6 +697,11 @@
     session = buildSchedule(mins * 60);
     session.t0 = Date.now();
     session.fading = false;
+    sessionActive = true;
+    // lock the arc-driven sliders (Space, Lofi, Volume stay yours)
+    ['moodCtl', 'densityCtl'].forEach(id => document.getElementById(id).classList.add('auto'));
+    ui.mood.disabled = true;
+    ui.density.disabled = true;
     arcWrap.style.display = 'block';
     sessBtn.textContent = 'END SESSION';
     // session start fades in (spec: bookends fade)
@@ -705,6 +718,11 @@
     clearInterval(session.timer);
     session = null;
     resolveBias = 1;
+    sessionActive = false;
+    ['moodCtl', 'densityCtl'].forEach(id => document.getElementById(id).classList.remove('auto'));
+    ui.mood.disabled = false;
+    ui.density.disabled = false;
+    refreshLabels(); // drop the "auto ·" prefix
     sessBtn.textContent = 'START SESSION';
     document.getElementById('phaseVal').textContent = 'off';
     arcWrap.style.display = 'none';
