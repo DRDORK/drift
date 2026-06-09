@@ -260,11 +260,12 @@
     satTone.connect(satGain);
     satGain.connect(lofiBus);
 
-    // vinyl crackle + faint hiss, looped
+    // tape hiss bed — dark lowpassed noise, zero transients (no vinyl ticks:
+    // they violate the reduced-auditory-salience requirement)
     crackleGain = ctx.createGain();
     crackleGain.gain.value = 0;
     const crackleSrc = ctx.createBufferSource();
-    crackleSrc.buffer = makeCrackle(20); // long loop so the tick pattern never reads as repeating
+    crackleSrc.buffer = makeTapeHiss(8);
     crackleSrc.loop = true;
     crackleSrc.connect(crackleGain);
     crackleGain.connect(lofiBus);
@@ -292,18 +293,26 @@
     return curve;
   }
 
-  function makeCrackle(seconds) {
+  function makeTapeHiss(seconds) {
     const len = ctx.sampleRate * seconds;
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);
+    // two-pole lowpassed noise (~250 Hz): a soft dark air bed, nothing salient
+    const a = 1 - Math.exp(-2 * Math.PI * 250 / ctx.sampleRate);
+    let y1 = 0, y2 = 0, peak = 0;
     for (let i = 0; i < len; i++) {
-      if (Math.random() < 0.00004) {
-        const amp = rand(0.25, 1) * (Math.random() < 0.5 ? -1 : 1);
-        for (let j = 0; j < 50 && i + j < len; j++) {
-          d[i + j] += amp * Math.pow(1 - j / 50, 2) * (Math.random() * 0.6 + 0.4);
-        }
-      }
-      d[i] += (Math.random() * 2 - 1) * 0.0025; // tape hiss floor
+      const x = Math.random() * 2 - 1;
+      y1 += a * (x - y1);
+      y2 += a * (y1 - y2);
+      d[i] = y2;
+      peak = Math.max(peak, Math.abs(y2));
+    }
+    for (let i = 0; i < len; i++) d[i] *= 0.5 / peak;
+    // crossfade the loop seam so the cycle is inaudible
+    const L = Math.floor(ctx.sampleRate * 0.5);
+    for (let i = 0; i < L; i++) {
+      const w = i / L;
+      d[i] = d[i] * w + d[len - L + i] * (1 - w);
     }
     return buf;
   }
@@ -581,9 +590,9 @@
     satGain.gain.linearRampToValueAtTime(makeup, t);                  // auto-gain-compensated sat path
     satTone.frequency.linearRampToValueAtTime(16000 - l * 12500, t);  // darken with wear
     wowDepth.gain.linearRampToValueAtTime(l * 0.0012, t);             // tape wow (pitch wobble)
-    // crackle is fully gated until the top half of the knob (tape/worn/crushed only)
-    const ck = l < 0.5 ? 0 : Math.pow((l - 0.5) / 0.5, 2) * 0.3;
-    crackleGain.gain.linearRampToValueAtTime(ck, t);
+    // tape hiss bed eases in over the top of the knob — quiet by design
+    const hs = l < 0.4 ? 0 : Math.pow((l - 0.4) / 0.6, 2) * 0.07;
+    crackleGain.gain.linearRampToValueAtTime(hs, t);
   }
 
   const moodWords = ['abyss', 'dusk', 'dusk', 'overcast', 'dawn', 'radiant'];
