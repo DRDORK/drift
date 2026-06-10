@@ -680,13 +680,14 @@
     return { D, tMedium: onRamp, tHigh: D - windDown - finalLift, tLow: D - windDown };
   }
 
-  // continuous intensity 0..1 along the arc — ramps in the bookends, steady middle.
+  // continuous intensity 0..1 along the arc — ramps in the bookends, and the
+  // deep-focus plateau itself rises gradually so the build never stalls.
   // (Improvement over the streaming API's three discrete steps.)
   function arcIntensity(t, s) {
-    const LOW = 0.22, MED = 0.55, HIGH = 0.85, END = 0.12;
-    if (t < s.tMedium) return LOW + (MED - LOW) * (t / Math.max(1, s.tMedium));
-    if (t < s.tHigh)   return MED;
-    if (t < s.tLow)    return MED + (HIGH - MED) * ((t - s.tHigh) / Math.max(1, s.tLow - s.tHigh));
+    const LOW = 0.15, MED_IN = 0.45, MED_OUT = 0.70, HIGH = 1.0, END = 0.10;
+    if (t < s.tMedium) return LOW + (MED_IN - LOW) * (t / Math.max(1, s.tMedium));
+    if (t < s.tHigh)   return MED_IN + (MED_OUT - MED_IN) * ((t - s.tMedium) / Math.max(1, s.tHigh - s.tMedium));
+    if (t < s.tLow)    return MED_OUT + (HIGH - MED_OUT) * ((t - s.tHigh) / Math.max(1, s.tLow - s.tHigh));
     return HIGH + (END - HIGH) * ((t - s.tLow) / Math.max(1, s.D - s.tLow));
   }
 
@@ -698,9 +699,10 @@
   }
 
   function applyIntensity(i) {
-    // drive the existing controls so the arc is visible on the knobs
-    ui.mood.value = Math.round(38 + i * 34);     // stays in warm-to-bright territory
-    ui.density.value = Math.round(12 + i * 62);
+    // drive the existing controls so the arc is visible on the knobs;
+    // full range so the final stretch actually peaks at/near max
+    ui.mood.value = Math.round(30 + i * 70);
+    ui.density.value = Math.round(8 + i * 92);
     refreshLabels();
     setMoodFilter();
   }
